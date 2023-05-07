@@ -1,19 +1,40 @@
 use bevy::prelude::*;
 use rand::random;
 
-const WIDTH: isize = 200;
-const HEIGHT: isize = 200;
 const FIRST_SPAWN_CHANCE: u8 = 15;
 
 fn main() {
 	App::new()
 		.add_plugins(DefaultPlugins)
+		.insert_resource(parse_program_argumnets())
 		.add_startup_system(setup)
 		.add_systems((
 			calculate_next_generation,
 			render_sandbox,
 		))
 		.run();
+}
+
+fn parse_program_argumnets() -> SimulationParameters {
+	let mut args = std::env::args();
+
+	args.next(); // ignore first parameter- the program's name
+
+	let width = args.next().expect("First parameter is required: width")
+		.parse::<u16>().expect("Width must be a natural number")
+		as isize;
+
+	let height = args.next().expect("Second parameter is required: height")
+		.parse::<u16>().expect("Height must be a natural number")
+		as isize;
+
+	SimulationParameters { width, height}
+}
+
+#[derive(Resource)]
+struct SimulationParameters {
+	pub width: isize,
+	pub height: isize,
 }
 
 fn state_to_color(state: bool) -> Color {
@@ -117,12 +138,16 @@ impl Sandbox {
 	}
 }
 
-fn setup(mut commands: Commands, window: Query<&Window>) {
+fn setup(
+	mut commands: Commands,
+	window: Query<&Window>,
+	simulation_parameters: Res<SimulationParameters>,
+) {
 	commands.spawn(Camera2dBundle::default());
 	let window = window.get_single().unwrap();
 	let (pixels_w, pixels_h) = (window.width(), window.height());
 
-	let mut sandbox = Sandbox::new(WIDTH, HEIGHT)
+	let mut sandbox = Sandbox::new(simulation_parameters.width, simulation_parameters.height)
 		.expect("Area of the world can't be zero or negative");
 
 	let (size_x, size_y) = (sandbox.width() as f32, sandbox.height() as f32);

@@ -1,5 +1,5 @@
 [package]
-name = "GameOfLife"
+name = "bevy_game_of_life"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,4 @@ opt-level = 3
 [dependencies]
 bevy = { version = "0.10.0"}
 bevy-inspector-egui = "0.18.0"
+rand = "0.8.5"

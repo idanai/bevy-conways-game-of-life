@@ -1,45 +1,28 @@
+use bevy::prelude::*;
+use rand::random;
 
-const WIDTH: isize = 500;
-const HEIGHT: isize = 500;
+const WIDTH: isize = 200;
+const HEIGHT: isize = 200;
+const FIRST_SPAWN_CHANCE: u8 = 15;
 
 fn main() {
-	// TEST
-	let mut sandbox = Sandbox::new(3, 3).expect("Failed to create world");
-	sandbox.write_cell(Point::new(0, 0), true);
-	sandbox.write_cell(Point::new(1, 0), true);
-	sandbox.write_cell(Point::new(2, 0), true);
-	sandbox.write_cell(Point::new(0, 1), true);
-	sandbox.write_cell(Point::new(1, 1), true);
-	sandbox.write_cell(Point::new(2, 1), true);
-	sandbox.write_cell(Point::new(0, 2), true);
-	sandbox.write_cell(Point::new(1, 2), true);
-	sandbox.write_cell(Point::new(2, 2), true);
-
-	println!("Whole Grid:");
-	for y in 0..sandbox.height() {
-		for x in 0..sandbox.width() {
-			print!("{}", if sandbox.read_cell(Point{x,y}) {'O'} else {'-'} );
-		}
-		println!();
-	}
-
-	println!("Frame:");
-
-	sandbox.read_moore_neighbourhood(Point::new(2,0))
-	.iter().enumerate().for_each(|(index, value)| {
-		if(index == 3 ||index == 5) {
-			println!();
-		}
-		if (index == 4) {
-			print!(" ");
-		}
-		print!("{}", if *value {'X'} else {'-'});
-	});
-	println!();
+	App::new()
+		.add_plugins(DefaultPlugins)
+		.add_startup_system(setup)
+		.add_systems((
+			calculate_next_generation,
+			render_sandbox,
+		))
+		.run();
 }
 
+fn state_to_color(state: bool) -> Color {
+	if state { Color::RED } else { Color::BLACK }
+}
+
+#[derive(Component)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct Point {
+pub struct Point {
 	pub x: isize,
 	pub y: isize,
 }
@@ -48,10 +31,22 @@ impl Point {
 	pub fn new(x: isize, y: isize) -> Self {
 		Self { x, y, }
 	}
+
+	pub fn to_index(&self, width: isize) -> isize {
+		width * self.y + self.x
+	}
+
+	pub fn is_in_bounds(&self, width: isize, height: isize) -> bool {
+		(0..width).contains(&self.x) && (0..height).contains(&self.y)
+	}
 }
 
+#[derive(Component)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct NextState(pub bool);
 
-struct Sandbox {
+#[derive(Resource)]
+pub struct Sandbox {
 	cells: Vec<bool>,
 	width: isize,
 	height: isize,
@@ -75,28 +70,25 @@ impl Sandbox {
 
 	pub fn area(&self) -> isize { self.width * self.height }
 
-	fn xy_to_index(width: isize, x: isize, y: isize) -> isize {
-		x + y * width
+	pub fn get_cell(&self, point: Point) -> &bool {
+		&self.cells[point.to_index(self.width) as usize]
 	}
 
-	fn point_to_index(width: isize, point: Point) -> isize {
-		Self::xy_to_index(width, point.x, point.y)
+	pub fn get_cell_mut(&mut self, point: Point) -> &mut bool {
+		&mut self.cells[point.to_index(self.width) as usize]
 	}
+
 
 	pub fn read_cell(&self, point: Point) -> bool {
-		self.cells[Self::point_to_index(self.width, point) as usize]
+		*self.get_cell(point)
 	}
 
 	pub fn write_cell(&mut self, point: Point, state: bool) {
-		self.cells[Self::point_to_index(self.width, point) as usize] = state;
-	}
-	
-	fn is_in_bounds(&self, x: isize, y: isize) -> bool {
-		y >= 0 && y < self.height && x >= 0 || x < self.width
+		*self.get_cell_mut(point) = state;
 	}
 
 	pub fn read_moore_neighbourhood(&self, point: Point) -> [bool; 8] {
-		if !self.is_in_bounds(point.x, point.y) {
+		if !point.is_in_bounds(self.width, self.height) {
 			panic!("Point is outsize of bounds! point = {:?}, bounds = ({}, {})", point, self.width, self.height);
 		}
 
@@ -109,18 +101,86 @@ impl Sandbox {
 		let x_end = if point.x == self.width-1 { 0 } else { 1 };
 		let y_end = if point.y == self.height-1 { 0 } else { 1 };
 
-		let center_index = Self::point_to_index(self.width, point);
+		let center_index = point.to_index(self.width);
 		for y in y_start..=y_end {
 			for x in x_start..=x_end {
 				if y == 0 && x == 0 {
 					continue;
 				}
-				let offset = Self::xy_to_index(self.width, x, y);
+				let offset = Point{x,y}.to_index(self.width);
 				arr[neighbor_count] = self.cells[(center_index + offset) as usize];
 				neighbor_count += 1;
 			}
 			neighbor_count += 2 - (x_end - x_start) as usize;
 		}
 		arr
+	}
+}
+
+fn setup(mut commands: Commands, window: Query<&Window>) {
+	commands.spawn(Camera2dBundle::default());
+	let window = window.get_single().unwrap();
+	let (pixels_w, pixels_h) = (window.width(), window.height());
+
+	let mut sandbox = Sandbox::new(WIDTH, HEIGHT)
+		.expect("Area of the world can't be zero or negative");
+
+	let (size_x, size_y) = (sandbox.width() as f32, sandbox.height() as f32);
+	let sprite_size = Vec2::new(pixels_w / size_x, pixels_h / size_y);
+	let sprite_size = Vec2::splat(if sprite_size.x > sprite_size.y {sprite_size.y} else {sprite_size.x});
+	let grid_offset = if pixels_h < pixels_w {pixels_h} else {pixels_w};
+
+
+	for y in 0..sandbox.height() {
+		for x in 0..sandbox.width() {
+			let state = random::<u8>() < FIRST_SPAWN_CHANCE;
+
+			sandbox.write_cell(Point{x,y}, state);
+
+			commands.spawn((
+				Point{x,y},
+				NextState(state),
+				SpriteBundle {
+					transform: Transform::from_xyz(
+						sprite_size.x * x as f32 + sprite_size.x * 0.5 - grid_offset * 0.5,
+						sprite_size.y * y as f32 + sprite_size.y * 0.5 - grid_offset * 0.5,
+						0.),
+					sprite: Sprite {
+						color: state_to_color(state),
+						custom_size: Some(sprite_size),
+						..default()
+					},
+					..default()
+				},
+			));
+		}
+	}
+
+	commands.insert_resource(sandbox);
+}
+
+fn render_sandbox(
+	mut query: Query<(&NextState, &mut Sprite)>,
+) {
+	for (value, mut sprite) in query.iter_mut() {
+		sprite.color = state_to_color(value.0);
+	}
+}
+
+fn calculate_next_generation(
+	mut query: Query<(&Point, &mut NextState)>,
+	mut sandbox: ResMut<Sandbox>,
+) {
+	for (point, mut next_state) in query.iter_mut() {
+		let is_alive = next_state.0;
+		let moore_neighbourhood = sandbox.read_moore_neighbourhood(*point);
+		let neighbors_count = moore_neighbourhood.iter().map(|v| *v as u8).sum::<u8>();
+		if is_alive && !(2..=3).contains(&neighbors_count) {
+			sandbox.write_cell(*point, false);
+			next_state.0 = false;
+		} else if neighbors_count == 3 {
+			sandbox.write_cell(*point, true);
+			next_state.0 = true;
+		}
 	}
 }

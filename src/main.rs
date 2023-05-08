@@ -145,16 +145,19 @@ fn setup(
 ) {
 	commands.spawn(Camera2dBundle::default());
 	let window = window.get_single().unwrap();
-	let (pixels_w, pixels_h) = (window.width(), window.height());
 
 	let mut sandbox = Sandbox::new(simulation_parameters.width, simulation_parameters.height)
 		.expect("Area of the world can't be zero or negative");
 
-	let (size_x, size_y) = (sandbox.width() as f32, sandbox.height() as f32);
-	let sprite_size = Vec2::new(pixels_w / size_x, pixels_h / size_y);
-	let sprite_size = Vec2::splat(if sprite_size.x > sprite_size.y {sprite_size.y} else {sprite_size.x});
-	let grid_offset = if pixels_h < pixels_w {pixels_h} else {pixels_w};
-
+	let sprite_size = {
+		let mut temp = Vec2::new(window.width() / sandbox.width() as f32, window.height() / sandbox.height() as f32);
+		if temp.x > temp.y {
+			temp.x = temp.y;
+		} else {
+			temp.y = temp.x;
+		}
+		temp
+	};
 
 	for y in 0..sandbox.height() {
 		for x in 0..sandbox.width() {
@@ -167,8 +170,8 @@ fn setup(
 				NextState(state),
 				SpriteBundle {
 					transform: Transform::from_xyz(
-						sprite_size.x * x as f32 + sprite_size.x * 0.5 - grid_offset * 0.5,
-						sprite_size.y * y as f32 + sprite_size.y * 0.5 - grid_offset * 0.5,
+						sprite_size.x * (x as f32 - sandbox.width() as f32 * 0.5) + sprite_size.x * 0.5,
+						sprite_size.y * (y as f32 - sandbox.height() as f32 * 0.5) + sprite_size.y * 0.5,
 						0.),
 					sprite: Sprite {
 						color: state_to_color(state),

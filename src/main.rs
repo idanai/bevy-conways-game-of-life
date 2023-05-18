@@ -34,8 +34,11 @@ fn parse_program_argumnets() -> gol::SimulationParameters {
 }
 
 
-fn state_to_color(state: bool) -> Color {
-	if state { Color::RED } else { Color::BLACK }
+fn state_to_color(cell: &gol::Cell) -> Color {
+	match cell {
+		gol::Cell::Alive(_) => Color::RED,
+		_ => Color::BLACK,
+	}
 }
 
 
@@ -63,20 +66,20 @@ fn setup(
 
 	for y in 0..sandbox.height() {
 		for x in 0..sandbox.width() {
-			let state = random::<u8>() < FIRST_SPAWN_CHANCE;
+			let cell = if random::<u8>() < FIRST_SPAWN_CHANCE { gol::Cell::Alive(0) } else { gol::Cell::Dead };
 
-			sandbox.write_cell(gol::Point{x,y}, state);
+			sandbox.write_cell(gol::Point{x,y}, cell);
 
 			commands.spawn((
 				gol::Point{x,y},
-				gol::NextCellState(state),
+				gol::NextCellState(cell),
 				SpriteBundle {
 					transform: Transform::from_xyz(
 						sprite_size.x * (x as f32 - sandbox.width() as f32 * 0.5) + sprite_size.x * 0.5,
 						sprite_size.y * (y as f32 - sandbox.height() as f32 * 0.5) + sprite_size.y * 0.5,
 						0.),
 					sprite: Sprite {
-						color: state_to_color(state),
+						color: state_to_color(&cell),
 						custom_size: Some(sprite_size),
 						..default()
 					},
@@ -93,7 +96,7 @@ fn render_sandbox(
 	mut query: Query<(&gol::NextCellState, &mut Sprite)>,
 ) {
 	for (value, mut sprite) in query.iter_mut() {
-		sprite.color = state_to_color(value.0);
+		sprite.color = state_to_color(&value.0);
 	}
 }
 
@@ -102,15 +105,18 @@ fn calculate_next_generation(
 	mut sandbox: ResMut<gol::Sandbox>,
 ) {
 	for (point, mut next_state) in query.iter_mut() {
-		let is_alive = next_state.0;
+		let is_alive = next_state.0.is_alive();
 		let moore_neighbourhood = sandbox.read_moore_neighbourhood(*point);
-		let neighbors_count = moore_neighbourhood.iter().map(|v| *v as u8).sum::<u8>();
+		let neighbors_count = moore_neighbourhood.iter()
+			.filter(|v| v.is_alive())
+			.count();
+
 		if is_alive && !(2..=3).contains(&neighbors_count) {
-			sandbox.write_cell(*point, false);
-			next_state.0 = false;
+			sandbox.write_cell(*point, gol::Cell::Dead);
+			next_state.0 = gol::Cell::Dead;
 		} else if neighbors_count == 3 {
-			sandbox.write_cell(*point, true);
-			next_state.0 = true;
+			sandbox.write_cell(*point, gol::Cell::Alive(0));
+			next_state.0 = gol::Cell::Alive(0);
 		}
 	}
 }

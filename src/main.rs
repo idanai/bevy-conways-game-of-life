@@ -187,11 +187,19 @@ fn war_system(
 			.sum::<i8>()
 			+ if let Alive(value) = next_state.0 {value} else {0};
 
-		let cell = if (2..=3).contains(&local_war.abs()) {
+		let cell =
+		if next_state.0.is_dead() {
+			if local_war.abs() == 3 {
+				Alive(if local_war > 0 { 1 } else { -1 })
+			} else {
+				Dead
+			}
+		} else if (2..=3).contains(&local_war.abs()) {
 			Alive(if local_war > 0 { 1 } else { -1 })
 		} else {
 			Dead
 		};
+
 		sandbox.write_cell(*point, cell);
 		next_state.0 = cell;
 	}

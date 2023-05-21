@@ -17,4 +17,11 @@ impl Cell {
 	pub fn is_alive(&self) -> bool {
 		!self.is_dead()
 	}
+
+	pub fn as_option(&self) -> Option<&i8> {
+		match self {
+			Alive(value) => Some(value),
+			_ => None,
+		}
+	}
 }

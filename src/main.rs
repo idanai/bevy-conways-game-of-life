@@ -3,7 +3,7 @@ use rand::random;
 
 mod gol;
 
-const FIRST_SPAWN_CHANCE: u8 = 15;
+const CHANCE_OF_LIFE: f32 = 0.15;
 
 fn main() {
 	App::new()
@@ -66,7 +66,7 @@ fn setup(
 
 	for y in 0..sandbox.height() {
 		for x in 0..sandbox.width() {
-			let cell = if random::<u8>() < FIRST_SPAWN_CHANCE { gol::Cell::Alive(0) } else { gol::Cell::Dead };
+			let cell = if random::<f32>() <= CHANCE_OF_LIFE { gol::Cell::Alive(0) } else { gol::Cell::Dead };
 
 			sandbox.write_cell(gol::Point{x,y}, cell);
 
